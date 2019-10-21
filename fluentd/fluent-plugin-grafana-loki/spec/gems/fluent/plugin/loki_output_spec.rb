@@ -153,6 +153,33 @@ RSpec.describe Fluent::Plugin::LokiOutput do
     expect(body[:streams][0]['entries'][0]['line']).to eq Yajl.dump('message' => content[0])
   end
 
+  it 'extracts record hash as one or more labels' do
+    config = <<-CONF
+      url     https://logs-us-west1.grafana.net
+      line_format json
+      label_keys "stream, label1, labels, label2"
+    CONF
+    driver = Fluent::Test::Driver::Output.new(described_class)
+    driver.configure(config)
+    content = File.readlines('spec/gems/fluent/plugin/data/syslog')
+    line1 = [
+      1_546_270_458,
+      {
+        'message' => content[0],
+        'stream' => 'stdout',
+        'label1' => 'value1old',
+        'label2' => 'value2',
+        'labels' => { 'label1' => 'value1', 'label2' => 'value2old', 'label3' => 'value3' }
+      }
+    ]
+    payload = driver.instance.generic_to_loki([line1])
+    body = { 'streams': payload }
+    expect(body[:streams][0]['labels']).to eq '{stream="stdout",label1="value1",label2="value2",label3="value3"}'
+    expect(body[:streams][0]['entries'].count).to eq 1
+    expect(body[:streams][0]['entries'][0]['ts']).to eq '2018-12-31T15:34:18.000000Z'
+    expect(body[:streams][0]['entries'][0]['line']).to eq Yajl.dump('message' => content[0])
+  end
+
   it 'formats as simple string when only 1 record key' do
     config = <<-CONF
       url     https://logs-us-west1.grafana.net

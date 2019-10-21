@@ -186,10 +186,19 @@ module Fluent
           } if @remove_keys
           # extract white listed record keys into labels.
           @label_keys.each do |k|
-            if record.key?(k)
-              chunk_labels[k] = record[k]
-              record.delete(k)
+            next unless record.key?(k)
+
+            record_value = record[k]
+
+            if record_value.is_a?(Hash)
+              record_value.each do |hk, hv|
+                chunk_labels[hk] = hv
+              end
+            else
+              chunk_labels[k] = record_value
             end
+
+            record.delete(k)
           end if @label_keys
           line = record_to_line(record)
         else
