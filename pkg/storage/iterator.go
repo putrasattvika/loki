@@ -77,6 +77,17 @@ type batchChunkIterator struct {
 
 // newBatchChunkIterator creates a new batch iterator with the given batchSize.
 func newBatchChunkIterator(ctx context.Context, chunks []*chunkenc.LazyChunk, batchSize int, matchers []*labels.Matcher, filter logql.Filter, req *logproto.QueryRequest) *batchChunkIterator {
+	// chunks that overlap with the last chunk according to batchSize will go
+	// through buildHeapIterator() multiple times. Because of that, we can't
+	// use the __name__ matcher since buildHeapIterator() will remove that label
+	// from the chunks that went through it.
+	for i := range matchers {
+		if matchers[i].Name == "__name__" {
+			matchers = append(matchers[:i], matchers[i+1:]...)
+			break
+		}
+	}
+
 	res := &batchChunkIterator{
 		batchSize: batchSize,
 		matchers:  matchers,
@@ -250,6 +261,11 @@ func buildIterators(ctx context.Context, chks map[model.Fingerprint][][]*chunken
 
 func buildHeapIterator(ctx context.Context, chks [][]*chunkenc.LazyChunk, filter logql.Filter, direction logproto.Direction, from, through time.Time) (iter.EntryIterator, error) {
 	result := make([]iter.EntryIterator, 0, len(chks))
+	if chks[0][0].Chunk.Metric.Has("__name__") {
+		labelsBuilder := labels.NewBuilder(chks[0][0].Chunk.Metric)
+		labelsBuilder.Del("__name__")
+		chks[0][0].Chunk.Metric = labelsBuilder.Labels()
+	}
 	labels := chks[0][0].Chunk.Metric.String()
 
 	for i := range chks {
