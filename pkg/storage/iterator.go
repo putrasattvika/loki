@@ -163,11 +163,11 @@ func (it *batchChunkIterator) nextBatch() (iter.EntryIterator, error) {
 			}
 		}
 	} else {
-		if len(it.lastOverlapping) > 0 {
+		if len(batch) > 0 {
 			if it.req.Direction == logproto.BACKWARD {
-				through = time.Unix(0, it.lastOverlapping[0].Chunk.From.UnixNano())
+				through = time.Unix(0, batch[0].Chunk.Through.UnixNano())
 			} else {
-				from = time.Unix(0, it.lastOverlapping[0].Chunk.Through.UnixNano())
+				from = time.Unix(0, batch[0].Chunk.From.UnixNano())
 			}
 		}
 	}
@@ -250,11 +250,6 @@ func buildIterators(ctx context.Context, chks map[model.Fingerprint][][]*chunken
 
 func buildHeapIterator(ctx context.Context, chks [][]*chunkenc.LazyChunk, filter logql.Filter, direction logproto.Direction, from, through time.Time) (iter.EntryIterator, error) {
 	result := make([]iter.EntryIterator, 0, len(chks))
-	if chks[0][0].Chunk.Metric.Has("__name__") {
-		labelsBuilder := labels.NewBuilder(chks[0][0].Chunk.Metric)
-		labelsBuilder.Del("__name__")
-		chks[0][0].Chunk.Metric = labelsBuilder.Labels()
-	}
 	labels := chks[0][0].Chunk.Metric.String()
 
 	for i := range chks {
